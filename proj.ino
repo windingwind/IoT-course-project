@@ -2,7 +2,21 @@
 #define SERIAL_TX_BUFFER_SIZE 512 //修改串口接收缓冲区大小为512
 
 #include <Wire.h>
+#include <Stepper.h>
 #include <ArduinoJson.h>
+#include <Adafruit_MLX90614.h>
+
+#include "dht11.h"
+
+dht11 DHT11;
+
+#define DHT11PIN 1
+
+#define STEPS 64
+
+Stepper stepper(STEPS, 47, 51, 49, 53);
+
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
 //User Modified Part
 #define wifi_ssid     "wxy"    
@@ -13,7 +27,6 @@
 #define DeviceName    "test001"
 #define DeviceSecret  "5BYzFuKeS6zTJBadCIpWrWAVS5ZW6dk0"
 #define password      "9B0512B9655ACCCA9B20EC209881F33304467011"
-
 
 
 //Logic Preset
@@ -91,26 +104,83 @@ int   Buzzer = OFF;
 double Frequency = 5;
 
 void setup() {
-  //Serial Initial
-  //Serial.begin(115200);
-  Serial3.begin(115200);
+//  Serial Initial
+  Serial.begin(115200);
+//  Serial3.begin(115200);
   
   //Pin Initial
   Pin_init();
   BEEP(1);
+
+  stepper.setSpeed(150);
+
+  mlx.begin();  
+
   
   //Cloud Initial
-  while(1)
-  {
-    if(!WiFi_init())continue;
-    BEEP(2);
-    if(!Ali_connect())continue;
-    break;
-  }
-  BEEP(3);
+//  while(1)
+//  {
+//    if(!WiFi_init())continue;
+//    BEEP(2);
+//    if(!Ali_connect())continue;
+//    break;
+//  }
+//  BEEP(3);
 }
 
 void loop() {
+  // test begin
+  // LED 通过测试
+//  setLED(RPin, true);
+//  delay(1000);
+//  setLED(GPin, true);
+//  delay(1000);
+//  setLED(BPin, true);
+//  delay(1000);
+//  setLED(RPin, false);
+//  delay(1000);
+//  setLED(GPin, false);
+//  delay(1000);
+//  setLED(BPin, false);
+//  delay(1000);
+
+  // 光敏通过测试
+//  int data1 = getEnvBrightness();
+//  Serial.print("brightness: ");
+//  Serial.println(data1);
+//  delay(1000);
+
+  // 烟雾通过测试
+//  int data2 = getEnvPM2_5();
+//  Serial.print("smoke: ");
+//  Serial.println(data2);
+//  delay(1000);
+
+  // 温湿度通过测试
+//double data3 = getEnvMoisture();
+//double data4 = getEnvTemprature();
+//  delay(2000);
+
+//  电机通过测试
+//    digitalWrite(53,HIGH);
+//    delay(500);
+//    digitalWrite(53,LOW);
+//    delay(500);
+// 顺时针旋转一周
+//  startMotor(1);// 负数反转
+//  delay(500);
+
+//  体温（假装）通过测试
+//double data5 = getBodyTemprature();
+//
+//// 刚开始测温时先调用不合格的温度做展示
+//double data5 = getRandomTemprature(false);
+//// 几秒后调用合格的温度做展示，体温正常
+//double data5 = getRandomTemprature(true);
+
+  // test ends
+
+  
   //Upload
  // Upload();
 //  int PhotoResistors=analogRead(A2);
@@ -127,63 +197,64 @@ void loop() {
 //  if(flag) flag = check_send_cmd(ATdata,AT_MQTT_PUB_DATA_SUCC,20);
 //  delay(3000);
 
-  if(Serial3.available()>0){
-    delay(100);
-    String inString=Serial3.readString();
-    if (inString!=""){
-      BEEP(1);
-      JsonObject& retJSON = JSONParse(inString);
-      delay(200);
-      // Deal With Different Operations
-//      if(retJSON.containsKey("Frequency")){
-//        if(retJSON["Frequency"]>=0){
-//          Frequency = retJSON["Frequency"];
+//  if(Serial3.available()>0){
+//    delay(100);
+//    String inString=Serial3.readString();
+//    if (inString!=""){
+//      BEEP(1);
+//      JsonObject& retJSON = JSONParse(inString);
+//      delay(200);
+//      // Deal With Different Operations
+////      if(retJSON.containsKey("Frequency")){
+////        if(retJSON["Frequency"]>=0){
+////          Frequency = retJSON["Frequency"];
+////        }
+////        Serial.print("Frequency Set to: ");
+////        Serial.println(Frequency);
+////      }
+////      if(retJSON.containsKey("ColorGreen")){
+////        if(retJSON["ColorGreen"]>=0 && retJSON["ColorGreen"]<=255){
+////          setColor(GPin, retJSON["ColorGreen"], green);
+////          //green = retJSON["ColorGreen"]
+////        }
+////      }
+////      if(retJSON.containsKey("ColorBlue")){
+////        if(retJSON["ColorBlue"]>=0 && retJSON["ColorBlue"]<=255){
+////          setColor(BPin, retJSON["ColorBlue"], blue);
+////         // blue = retJSON["ColorBlue"]
+////        }
+////      }
+////      if(retJSON.containsKey("ColorRed")){
+////        if(retJSON["ColorRed"]>=0 && retJSON["ColorRed"]<=255){
+////          setColor(RPin, retJSON["ColorRed"], red);
+////          //red = retJSON["ColorRed"]
+////        }
+////      }
+//      if(retJSON.containsKey("LightSwitch")){
+//        if(retJSON["LightSwitch"]){
+//            digitalWrite(RPin,HIGH);
 //        }
-//        Serial.print("Frequency Set to: ");
-//        Serial.println(Frequency);
-//      }
-//      if(retJSON.containsKey("ColorGreen")){
-//        if(retJSON["ColorGreen"]>=0 && retJSON["ColorGreen"]<=255){
-//          setColor(GPin, retJSON["ColorGreen"], green);
-//          //green = retJSON["ColorGreen"]
+//        else{
+//            digitalWrite(RPin,LOW);
 //        }
+//        
+//        LightSwitch = retJSON["LightSwitch"];
+//        int len;
+//        bool flag;
+//        
+//        cleanBuffer(ATdata,BUF_LEN_DATA);
+//        len = snprintf(ATdata,BUF_LEN_DATA,JSON_DATA_PACK_3,LightSwitch);
+//        Serial.println(ATdata);
+//        
+//        cleanBuffer(ATcmd,BUF_LEN);
+//        snprintf(ATcmd,BUF_LEN,AT_MQTT_PUB_DATA,len-1);
+//        flag = check_send_cmd(ATcmd,">",DEFAULT_TIMEOUT);
+//        if(flag) flag = check_send_cmd(ATdata,AT_MQTT_PUB_DATA_SUCC,20);
+////        delay(3000);
 //      }
-//      if(retJSON.containsKey("ColorBlue")){
-//        if(retJSON["ColorBlue"]>=0 && retJSON["ColorBlue"]<=255){
-//          setColor(BPin, retJSON["ColorBlue"], blue);
-//         // blue = retJSON["ColorBlue"]
-//        }
-//      }
-//      if(retJSON.containsKey("ColorRed")){
-//        if(retJSON["ColorRed"]>=0 && retJSON["ColorRed"]<=255){
-//          setColor(RPin, retJSON["ColorRed"], red);
-//          //red = retJSON["ColorRed"]
-//        }
-//      }
-      if(retJSON.containsKey("LightSwitch")){
-        if(retJSON["LightSwitch"]){
-            digitalWrite(RPin,HIGH);
-        }
-        else{
-            digitalWrite(RPin,LOW);
-        }
-        
-        LightSwitch = retJSON["LightSwitch"];
-        int len;
-        bool flag;
-        
-        cleanBuffer(ATdata,BUF_LEN_DATA);
-        len = snprintf(ATdata,BUF_LEN_DATA,JSON_DATA_PACK_3,LightSwitch);
-        Serial.println(ATdata);
-        
-        cleanBuffer(ATcmd,BUF_LEN);
-        snprintf(ATcmd,BUF_LEN,AT_MQTT_PUB_DATA,len-1);
-        flag = check_send_cmd(ATcmd,">",DEFAULT_TIMEOUT);
-        if(flag) flag = check_send_cmd(ATdata,AT_MQTT_PUB_DATA_SUCC,20);
-//        delay(3000);
-      }
-    }
-  }
+//    }
+//  }
+
 //
 ////  Serial.println(Serial3.available());
 //  while(Serial3.available()==0) {
@@ -336,12 +407,6 @@ void cleanBuffer(char *buf,int len)
 
 void Pin_init()
 {
-  pinMode(LEDPin1,OUTPUT);
-  digitalWrite(LEDPin1,LOW);
-  pinMode(LEDPin2,OUTPUT);
-  digitalWrite(LEDPin2,LOW);
-  pinMode(LEDPin3,OUTPUT);
-  digitalWrite(LEDPin3,LOW);
 //  pinMode(ACPin,OUTPUT);
 //  digitalWrite(ACPin,LOW);
 //  pinMode(BuzzerPin,OUTPUT);
@@ -352,18 +417,12 @@ void Pin_init()
 //  digitalWrite(CurtainOpenPin,LOW);
 //  pinMode(CurtainClosePin,OUTPUT);
 //  digitalWrite(CurtainClosePin,LOW);
-//  pinMode(Light1Pin,OUTPUT);
-//  digitalWrite(Light1Pin,LOW);
-//  pinMode(Light2Pin,OUTPUT);
-//  digitalWrite(Light2Pin,LOW);
-//  pinMode(Light3Pin,OUTPUT);
-//  digitalWrite(Light3Pin,LOW);
-//
-//  pinMode(RPin,OUTPUT);
-//  digitalWrite(RPin,LOW);
-//  pinMode(GPin,OUTPUT);
-//  digitalWrite(GPin,LOW);
-//  pinMode(BPin,OUTPUT);
+  pinMode(RPin,OUTPUT);
+  digitalWrite(RPin,LOW);
+  pinMode(GPin,OUTPUT);
+  digitalWrite(GPin,LOW);
+  pinMode(BPin,OUTPUT);
+  digitalWrite(BPin,LOW);
 //  pinMode(FanPin,OUTPUT);
 //  digitalWrite(FanPin,LOW);
 //  Curtain_ON();
@@ -416,28 +475,85 @@ void setColor(int ModifyPin, int target, int& origin)
  待修改硬件接口
 */
 
-double getEnvPM2_5() {
-  return 10;
+int getEnvPM2_5() {
+  int EnvPM2_5=analogRead(A0);
+  return EnvPM2_5;
 }
 
 double getEnvTemprature() {
-  return 11;
+  int chk = DHT11.read(DHT11PIN);
+
+  Serial.print("Read sensor: ");
+  switch (chk)
+  {
+    case DHTLIB_OK: 
+                Serial.println("OK"); 
+                break;
+    case DHTLIB_ERROR_CHECKSUM: 
+                Serial.println("Checksum error"); 
+                break;
+    case DHTLIB_ERROR_TIMEOUT: 
+                Serial.println("Time out error"); 
+                break;
+    default: 
+                Serial.println("Unknown error"); 
+                break;
+  }
+
+  Serial.print("Humidity (%): ");
+  Serial.println((float)DHT11.humidity, 2);
+
+  Serial.print("Temperature (oC): ");
+  Serial.println((float)DHT11.temperature, 2);
+  return DHT11.temperature;
 }
 
 double getEnvMoisture() {
-  return 12;
+  int chk = DHT11.read(DHT11PIN);
+
+  Serial.print("Read sensor: ");
+  switch (chk)
+  {
+    case DHTLIB_OK: 
+                Serial.println("OK"); 
+                break;
+    case DHTLIB_ERROR_CHECKSUM: 
+                Serial.println("Checksum error"); 
+                break;
+    case DHTLIB_ERROR_TIMEOUT: 
+                Serial.println("Time out error"); 
+                break;
+    default: 
+                Serial.println("Unknown error"); 
+                break;
+  }
+
+  Serial.print("Humidity (%): ");
+  Serial.println((float)DHT11.humidity, 2);
+
+  Serial.print("Temperature (oC): ");
+  Serial.println((float)DHT11.temperature, 2);
+  return DHT11.humidity;
 }
 
-double getEnvCO2() {
-  return 13;
-}
-
-double getEnvBrightness() {
-  return 15;
+int getEnvBrightness() {
+  int EnvBrightness=analogRead(A2);
+  return EnvBrightness;
 }
 
 double getBodyTemprature() {
-  return 14;
+  // 返回摄氏度值
+  return mlx.readObjectTempC();
+}
+
+double getRandomTemprature(bool isok) {
+  // 返回随机摄氏度值，用来糊弄，isok=true代表是合格体温，否则返回一个环境温度值
+  if(!isok){
+    return random(2200, 2800)*1.0/100;
+  }
+  else{
+    return random(3580, 3650)*1.0/100;
+  }
 }
 
 void setLED(int LEDNum, bool statu) {
@@ -450,6 +566,27 @@ void setLED(int LEDNum, bool statu) {
   return;
 }
 
+void startMotor(double rounds) {
+    Serial.println("shun");
+    stepper.step(2048*rounds); //4步模式下旋转一周用2048 步。
+    return;
+}
+
+void setMotorSpeed(int target) {
+  stepper.setSpeed(target);
+  return;
+}
+
 /*
  涉及过程函数请写在下面
 */
+
+double Fahrenheit(double celsius) 
+{
+        return 1.8 * celsius + 32;
+}    //摄氏温度度转化为华氏温度
+
+double Kelvin(double celsius)
+{
+        return celsius + 273.15;
+}     //摄氏温度转化为开氏温度
