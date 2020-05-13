@@ -5,28 +5,24 @@
 #include <Stepper.h>
 #include <ArduinoJson.h>
 #include <Adafruit_MLX90614.h>
-
-#include "dht11.h"
-
-dht11 DHT11;
-
-#define DHT11PIN 1
-
-#define STEPS 64
-
-Stepper stepper(STEPS, 47, 51, 49, 53);
-
-Adafruit_MLX90614 mlx = Adafruit_MLX90614();
+#include <dht11.h>
 
 //User Modified Part
 #define wifi_ssid     "wxy"    
 #define wifi_psw      "wxy12345678"     
-#define clientIDstr   "123456789abc"
-#define timestamp     "996"
-#define ProductKey    "a1v0RymPkXS"
-#define DeviceName    "test001"
-#define DeviceSecret  "5BYzFuKeS6zTJBadCIpWrWAVS5ZW6dk0"
-#define password      "9B0512B9655ACCCA9B20EC209881F33304467011"
+//#define clientIDstr   "123456789abc"
+//#define timestamp     "996"
+//#define ProductKey    "a1v0RymPkXS"
+//#define DeviceName    "test001"
+//#define DeviceSecret  "5BYzFuKeS6zTJBadCIpWrWAVS5ZW6dk0"
+//#define password      "9B0512B9655ACCCA9B20EC209881F33304467011"
+
+#define clientIDstr   "test"
+#define timestamp     "997"
+#define ProductKey    "a1EquCiRo6F"
+#define DeviceName    "ioT_test"
+#define DeviceSecret  "mHwHytlM80XYH8wdse3f5BiCTb7rA68Q"
+#define password      "E072FAD8158EE9AC03B1161FDA418C1F1348AAB6"
 
 
 //Logic Preset
@@ -50,6 +46,7 @@ Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
 
 //ATcmd Format
+//ATcmd Format
 #define AT                    "AT\r"
 #define AT_OK                 "OK"
 #define AT_REBOOT             "AT+REBOOT\r"
@@ -70,10 +67,9 @@ Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 #define AT_MQTT_PUB_SET       "AT+MQTTPUB=/sys/%s/%s/thing/event/property/post,1\r"
 #define AT_MQTT_PUB_ALARM_SET "AT+MQTTPUB=/sys/%s/%s/thing/event/GasAlarm/post,1\r"
 #define AT_MQTT_PUB_DATA      "AT+MQTTSEND=%d\r"
-#define JSON_DATA_PACK        "{\"id\":\"100\",\"version\":\"1.0\",\"method\":\"thing.event.property.post\",\"params\":{\"RoomTemp\":%d.%02d,\"AC\":%d,\"Fan\":%d,\"Buzzer\":%d,\"GasDetector\":%d}}\r"
-#define JSON_DATA_PACK_2      "{\"id\":\"110\",\"version\":\"1.0\",\"method\":\"thing.event.property.post\",\"params\":{\"PhotoResistors\":%d}}\r"
-#define JSON_DATA_PACK_3      "{\"id\":\"110\",\"version\":\"1.0\",\"method\":\"thing.event.property.post\",\"params\":{\"LightSwitch\":%d}}\r"
-#define JSON_DATA_PACK_ALARM  "{\"id\":\"110\",\"version\":\"1.0\",\"method\":\"thing.event.GasAlarm.post\",\"params\":{\"GasDetector\":%d}}\r"
+#define JSON_ENV_DATA_PACK        "{\"id\":\"100\",\"version\":\"1.0\",\"method\":\"thing.event.property.post\",\"params\":{\"IndoorTemperature\":%d.%01d,\"EnvHumidity\":%d.%01d,\"PhotoResistors\":%d,\"PM25\":%d,\"co2\":%d}}\r"
+#define JSON_BODYTEMP_DATA_PACK      "{\"id\":\"110\",\"version\":\"1.0\",\"method\":\"thing.event.property.post\",\"params\":{\"BodyTemperature\":%d.%02d,\"bodyTempStatus\":%d}}\r"
+#define JSON_DOORSTA_DATA_PACK      "{\"id\":\"120\",\"version\":\"1.0\",\"method\":\"thing.event.property.post\",\"params\":{\"doorStatus\":%d}}\r"
 #define AT_MQTT_PUB_DATA_SUCC "+MQTTEVENT:PUBLISH,SUCCESS"
 #define AT_MQTT_UNSUB         "AT+MQTTUNSUB=2\r"
 #define AT_MQTT_SUB           "AT+MQTTSUB=1,/sys/%s/%s/thing/service/property/set,1\r"
@@ -81,19 +77,23 @@ Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
 #define AT_BUZZER_MUTE           "\"Buzzer\":2"
 
-#define Light3Pin             13
-
-int red=0,green=0,blue=0;
 #define RPin 7
 #define GPin 8
 #define BPin 9
 
-bool LightSwitch = false;
-#define LPin 7
-
 #define DEFAULT_TIMEOUT       10   //seconds
 #define BUF_LEN               100
 #define BUF_LEN_DATA          190
+
+dht11 DHT11;
+
+#define DHT11PIN 22
+
+#define STEPS 64
+
+Stepper stepper(STEPS, 47, 51, 49, 53);
+
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
 char      ATcmd[BUF_LEN];
 char      ATbuffer[BUF_LEN];
@@ -101,12 +101,31 @@ char      ATdata[BUF_LEN_DATA];
 #define BuzzerPin             3
 int   Buzzer = OFF;
 
+//Threshold Value Preset
+#define BodyTemp_LOW   35
+#define BodyTemp_HIGH   37.2//低于BodyTemp_LOW时发送请靠近一点，高于BodyTemp_HIGH时报警，此阈值调试时设定
+
 double Frequency = 5;
+
+//Status Pool
+double RoomTemp;
+double RoomMois;
+double BodyTemp;
+int   LightDetector = 0;
+int   eCO2 = 0;
+int   TVOC = 0;
+int   Door = OFF;
+int   norCount = 0;
+int   bodyTempStatus = 1;
+int   count = 0;
+int   simCount = 5;
+int   Start = 0;
+String data;
 
 void setup() {
 //  Serial Initial
   Serial.begin(115200);
-//  Serial3.begin(115200);
+  Serial3.begin(115200);
   
   //Pin Initial
   Pin_init();
@@ -115,197 +134,109 @@ void setup() {
   stepper.setSpeed(150);
 
   mlx.begin();  
-
   
   //Cloud Initial
-//  while(1)
-//  {
-//    if(!WiFi_init())continue;
-//    BEEP(2);
-//    if(!Ali_connect())continue;
-//    break;
-//  }
-//  BEEP(3);
+  while(1)
+  {
+    if(!WiFi_init())continue;
+    BEEP(2);
+    if(!Ali_connect())continue;
+    break;
+  }
+  BEEP(3);
 }
 
 void loop() {
-  // test begin
-  // LED 通过测试
-//  setLED(RPin, true);
-//  delay(1000);
-//  setLED(GPin, true);
-//  delay(1000);
-//  setLED(BPin, true);
-//  delay(1000);
-//  setLED(RPin, false);
-//  delay(1000);
-//  setLED(GPin, false);
-//  delay(1000);
-//  setLED(BPin, false);
-//  delay(1000);
-
-  // 光敏通过测试
-//  int data1 = getEnvBrightness();
-//  Serial.print("brightness: ");
-//  Serial.println(data1);
-//  delay(1000);
-
-  // 烟雾通过测试
-//  int data2 = getEnvPM2_5();
-//  Serial.print("smoke: ");
-//  Serial.println(data2);
-//  delay(1000);
-
-  // 温湿度通过测试
-//double data3 = getEnvMoisture();
-//double data4 = getEnvTemprature();
-//  delay(2000);
-
-//  电机通过测试
-//    digitalWrite(53,HIGH);
-//    delay(500);
-//    digitalWrite(53,LOW);
-//    delay(500);
-// 顺时针旋转一周
-//  startMotor(1);// 负数反转
+  //sensorCollect
+  RoomTemp = getEnvTemprature();
+  delay(500);
+  RoomMois = getEnvMoisture();
+  delay(500);
+//  eCO2 = getEnvCO2();
 //  delay(500);
+  TVOC = getEnvPM2_5();
+  delay(500);
+  LightDetector = getEnvBrightness();
+  delay(500);
 
-//  体温（假装）通过测试
-//double data5 = getBodyTemprature();
-//
-//// 刚开始测温时先调用不合格的温度做展示
-//double data5 = getRandomTemprature(false);
-//// 几秒后调用合格的温度做展示，体温正常
-//double data5 = getRandomTemprature(true);
-
-  // test ends
-
+  String inString;
+  delay(10);
+  if(Serial3.available()>0){
+    delay(1000);
+    inString = Serial3.readString();
+    if(inString!="" && inString.length()>50){
+      data = inString;
+      Serial.println(data);
+      delay(10);
+      Start = JsonParse(data);
+    }
+  }
   
-  //Upload
- // Upload();
-//  int PhotoResistors=analogRead(A2);
-//  int len;
-//  bool flag;
-//
-//  cleanBuffer(ATdata,BUF_LEN_DATA);
-//  len = snprintf(ATdata,BUF_LEN_DATA,JSON_DATA_PACK_2,PhotoResistors);
-//  Serial.println(ATdata);
-//
-//  cleanBuffer(ATcmd,BUF_LEN);
-//  snprintf(ATcmd,BUF_LEN,AT_MQTT_PUB_DATA,len-1);
-//  flag = check_send_cmd(ATcmd,">",DEFAULT_TIMEOUT);
-//  if(flag) flag = check_send_cmd(ATdata,AT_MQTT_PUB_DATA_SUCC,20);
-//  delay(3000);
-
-//  if(Serial3.available()>0){
-//    delay(100);
-//    String inString=Serial3.readString();
-//    if (inString!=""){
-//      BEEP(1);
-//      JsonObject& retJSON = JSONParse(inString);
-//      delay(200);
-//      // Deal With Different Operations
-////      if(retJSON.containsKey("Frequency")){
-////        if(retJSON["Frequency"]>=0){
-////          Frequency = retJSON["Frequency"];
-////        }
-////        Serial.print("Frequency Set to: ");
-////        Serial.println(Frequency);
-////      }
-////      if(retJSON.containsKey("ColorGreen")){
-////        if(retJSON["ColorGreen"]>=0 && retJSON["ColorGreen"]<=255){
-////          setColor(GPin, retJSON["ColorGreen"], green);
-////          //green = retJSON["ColorGreen"]
-////        }
-////      }
-////      if(retJSON.containsKey("ColorBlue")){
-////        if(retJSON["ColorBlue"]>=0 && retJSON["ColorBlue"]<=255){
-////          setColor(BPin, retJSON["ColorBlue"], blue);
-////         // blue = retJSON["ColorBlue"]
-////        }
-////      }
-////      if(retJSON.containsKey("ColorRed")){
-////        if(retJSON["ColorRed"]>=0 && retJSON["ColorRed"]<=255){
-////          setColor(RPin, retJSON["ColorRed"], red);
-////          //red = retJSON["ColorRed"]
-////        }
-////      }
-//      if(retJSON.containsKey("LightSwitch")){
-//        if(retJSON["LightSwitch"]){
-//            digitalWrite(RPin,HIGH);
-//        }
-//        else{
-//            digitalWrite(RPin,LOW);
-//        }
-//        
-//        LightSwitch = retJSON["LightSwitch"];
-//        int len;
-//        bool flag;
-//        
-//        cleanBuffer(ATdata,BUF_LEN_DATA);
-//        len = snprintf(ATdata,BUF_LEN_DATA,JSON_DATA_PACK_3,LightSwitch);
-//        Serial.println(ATdata);
-//        
-//        cleanBuffer(ATcmd,BUF_LEN);
-//        snprintf(ATcmd,BUF_LEN,AT_MQTT_PUB_DATA,len-1);
-//        flag = check_send_cmd(ATcmd,">",DEFAULT_TIMEOUT);
-//        if(flag) flag = check_send_cmd(ATdata,AT_MQTT_PUB_DATA_SUCC,20);
-////        delay(3000);
-//      }
-//    }
-//  }
-
-//
-////  Serial.println(Serial3.available());
-//  while(Serial3.available()==0) {
-//    int delay_seconds=1.0/Frequency*1000;
-//    delay(delay_seconds/2);
-//    digitalWrite(13,HIGH);
-//    delay(delay_seconds/2);
-//    digitalWrite(13,LOW);
-//  }
+  if(Start){
+    BEEP(2);
+    //模拟测体温
+    BodyTemp = getRandomTemprature(false);
+    count++;
   
-  //MsgReceive
-//  if(check_send_cmd(AT,AT_BUZZER_MUTE,DEFAULT_TIMEOUT))Buzzer_mute();
+    int count_2 = 0;
+    if(count > simCount){
+      while(count_2 < 5){
+        BodyTemp = getRandomTemprature(true);
+        if(getEnvBrightness()>500){
+          BodyTemp = 38;
+          Serial.println("warning");
+        }
+        judgeTemp();
+        if(norCount == 3){
+          BEEP(3);
+          norCount = 0;
+          UploadBodyTemp();
+          doorMotion();
+          setLED(GPin, false);
+          setLED(RPin, false);
+          setLED(BPin, false);
+        }
+        UploadEnv();
+        count_2++;
+        }
+        simCount = rand() % 5 + 3;
+        count = 0;
+    }else{
+      if(getEnvBrightness()>500){
+        BodyTemp = 38;
+        Serial.println("warning");
+      }
+      judgeTemp();
+      if(norCount == 3){
+        BEEP(3);
+        norCount = 0;
+        UploadBodyTemp();
+        doorMotion();
+        setLED(GPin, false);
+        setLED(RPin, false);
+        setLED(BPin, false);
+      }
+      UploadEnv();
+    }
+    
+    //真实测体温
+  //  BodyTemp = getBodyTemprature();
+  //  judgeTemp();
+  //  if(norCount == 3){
+  //    setLED(GPin, true);
+  //    setLED(RPin, false);
+  //    setLED(BPin, false);
+  //    norCount = 0;
+  //    UploadBodyTemp();
+  //    doorMotion();
+  //  }
+  //  UploadEnv();
+  }else{
+    setLED(GPin, false);
+    setLED(RPin, false);
+    setLED(BPin, false);
+  }
 }
-
-/* bool Upload()
-{
-  bool flag;
-  int inte1,frac1;
-  int len;
-
-  cleanBuffer(ATcmd,BUF_LEN);
-  snprintf(ATcmd,BUF_LEN,AT_MQTT_PUB_SET,ProductKey,DeviceName);
-  flag = check_send_cmd(ATcmd,AT_OK,DEFAULT_TIMEOUT);
-   
-  
-  cleanBuffer(ATdata,BUF_LEN_DATA);
-
-  inte1 = (int)(RoomTemp);
-  frac1 = (RoomTemp - inte1) * 100;
-  
-  len = snprintf(ATdata,BUF_LEN_DATA,JSON_DATA_PACK,inte1,frac1,AC,Fan,Buzzer,GasDetector);
-  
-  cleanBuffer(ATcmd,BUF_LEN);
-  snprintf(ATcmd,BUF_LEN,AT_MQTT_PUB_DATA,len-1);
-  flag = check_send_cmd(ATcmd,">",DEFAULT_TIMEOUT);
-  if(flag) flag = check_send_cmd(ATdata,AT_MQTT_PUB_DATA_SUCC,20);
-  
-  
-//  delay(500);
-  
-  cleanBuffer(ATdata,BUF_LEN_DATA);
-  len = snprintf(ATdata,BUF_LEN_DATA,JSON_DATA_PACK_2,LightDetector,Curtain,Light,SoilHumi,Pump,eCO2,TVOC);
-
-  cleanBuffer(ATcmd,BUF_LEN);
-  snprintf(ATcmd,BUF_LEN,AT_MQTT_PUB_DATA,len-1);
-  flag = check_send_cmd(ATcmd,">",DEFAULT_TIMEOUT);
-  if(flag) flag = check_send_cmd(ATdata,AT_MQTT_PUB_DATA_SUCC,20);
-
-  return flag;
-}
-*/
 
 bool Ali_connect()
 {
@@ -407,25 +338,12 @@ void cleanBuffer(char *buf,int len)
 
 void Pin_init()
 {
-//  pinMode(ACPin,OUTPUT);
-//  digitalWrite(ACPin,LOW);
-//  pinMode(BuzzerPin,OUTPUT);
-//  digitalWrite(BuzzerPin,LOW);
-//  pinMode(PumpPin,OUTPUT);
-//  digitalWrite(PumpPin,LOW);
-//  pinMode(CurtainOpenPin,OUTPUT);
-//  digitalWrite(CurtainOpenPin,LOW);
-//  pinMode(CurtainClosePin,OUTPUT);
-//  digitalWrite(CurtainClosePin,LOW);
   pinMode(RPin,OUTPUT);
   digitalWrite(RPin,LOW);
   pinMode(GPin,OUTPUT);
   digitalWrite(GPin,LOW);
   pinMode(BPin,OUTPUT);
   digitalWrite(BPin,LOW);
-//  pinMode(FanPin,OUTPUT);
-//  digitalWrite(FanPin,LOW);
-//  Curtain_ON();
 }
 
 void BEEP(int b_time)
@@ -438,37 +356,36 @@ void BEEP(int b_time)
     delay(100);
   }
 }
+
 void Buzzer_mute()
 {
   Buzzer_OFF;
   Buzzer = MUTE;
 }
 
-JsonObject& JSONParse(String raw)
-{
-  // Remove Raw Data Head
-  String JSONRaw = raw.substring(raw.indexOf('{'), raw.length());
-  Serial.println("==============Parse Start================");
-  Serial.println(JSONRaw);
+int JsonParse(String data){
+   StaticJsonBuffer<200> jsonBuffer;
 
-  StaticJsonBuffer<200> jsonBuffer;
-  JsonObject& root = jsonBuffer.parseObject(JSONRaw);
-  return root["params"];
-}
+    int commaPosition;  
+    commaPosition = data.indexOf('{');
+    data= data.substring(commaPosition, data.length());
+    //Serial3.println(data);
 
-void setColor(int ModifyPin, int target, int& origin)
-{
-  int t = origin-(origin - target)%30;
-  int step_v = (origin - target)/30;
+    char datapointer[data.length()+1];
+    strcpy(datapointer,data.c_str());
+    
+    JsonObject& root = jsonBuffer.parseObject(data);
+    const char* method  = root["method"];
+    const char* id      = root["id"];
+    int         isStart  = root["params"]["Switch"];
 
-  analogWrite(ModifyPin, t);
-  delay(30);
-  while(t!=target){
-    t-=step_v;
-    analogWrite(ModifyPin, t);
-    delay(30);
-  }
-  origin=target;
+//     Print values.
+    Serial.println("==============Start================");
+    Serial.println(method);
+    Serial.println(id);
+    Serial.println(isStart);
+    
+    return isStart;  
 }
 
 /*
@@ -483,11 +400,11 @@ int getEnvPM2_5() {
 double getEnvTemprature() {
   int chk = DHT11.read(DHT11PIN);
 
-  Serial.print("Read sensor: ");
+//  Serial.print("Read sensor: ");
   switch (chk)
   {
     case DHTLIB_OK: 
-                Serial.println("OK"); 
+//                Serial.println("OK"); 
                 break;
     case DHTLIB_ERROR_CHECKSUM: 
                 Serial.println("Checksum error"); 
@@ -499,23 +416,17 @@ double getEnvTemprature() {
                 Serial.println("Unknown error"); 
                 break;
   }
-
-  Serial.print("Humidity (%): ");
-  Serial.println((float)DHT11.humidity, 2);
-
-  Serial.print("Temperature (oC): ");
-  Serial.println((float)DHT11.temperature, 2);
   return DHT11.temperature;
 }
 
 double getEnvMoisture() {
   int chk = DHT11.read(DHT11PIN);
 
-  Serial.print("Read sensor: ");
+//  Serial.print("Read sensor: ");
   switch (chk)
   {
     case DHTLIB_OK: 
-                Serial.println("OK"); 
+//                Serial.println("OK"); 
                 break;
     case DHTLIB_ERROR_CHECKSUM: 
                 Serial.println("Checksum error"); 
@@ -527,12 +438,6 @@ double getEnvMoisture() {
                 Serial.println("Unknown error"); 
                 break;
   }
-
-  Serial.print("Humidity (%): ");
-  Serial.println((float)DHT11.humidity, 2);
-
-  Serial.print("Temperature (oC): ");
-  Serial.println((float)DHT11.temperature, 2);
   return DHT11.humidity;
 }
 
@@ -557,6 +462,8 @@ double getRandomTemprature(bool isok) {
 }
 
 void setLED(int LEDNum, bool statu) {
+  Serial.print("led set:");
+  Serial.println(LEDNum, statu);
   if(statu) {
     digitalWrite(LEDNum,HIGH);
   }
@@ -567,9 +474,10 @@ void setLED(int LEDNum, bool statu) {
 }
 
 void startMotor(double rounds) {
-    Serial.println("shun");
-    stepper.step(2048*rounds); //4步模式下旋转一周用2048 步。
-    return;
+  Serial.print("motor running");
+  Serial.println(rounds);
+  stepper.step(2048*rounds); //4步模式下旋转一周用2048 步。
+  return;
 }
 
 void setMotorSpeed(int target) {
@@ -581,12 +489,143 @@ void setMotorSpeed(int target) {
  涉及过程函数请写在下面
 */
 
-double Fahrenheit(double celsius) 
-{
-        return 1.8 * celsius + 32;
-}    //摄氏温度度转化为华氏温度
+void judgeTemp(){
+  if(BodyTemp < BodyTemp_LOW)
+  {
+    bodyTempStatus = 0;
+  }
+  if(BodyTemp > BodyTemp_HIGH)
+  {
+    bodyTempStatus = 1;
+  }
+  if((BodyTemp < BodyTemp_HIGH) && (BodyTemp > BodyTemp_LOW))
+  {
+    bodyTempStatus = 2;
+  }
+  
+  switch(bodyTempStatus){
+    case 0: 
+    setLED(GPin, false);
+    setLED(RPin, false);
+    setLED(BPin, true);
+    norCount = 0;
+    UploadBodyTemp();
+    Serial.println("请您靠近一点！");
+    break;
+    case 1:
+    setLED(GPin, false);
+    setLED(RPin, true);
+    setLED(BPin, false);
+    norCount = 0;
+    UploadBodyTemp();
+    Serial.println("case 1");
+    delay(3000);
+    break;
+    case 2:
+    setLED(GPin, true);
+    setLED(RPin, false);
+    setLED(BPin, false);
+    Serial.println("case 2");
+    norCount++;
+    UploadBodyTemp();
+  }
+  return ;
+}
 
-double Kelvin(double celsius)
+void doorMotion(){
+  //这里的延时即为绿灯亮的延时,下面delay为电机开关门转动时的延时
+  Door = ON;
+  Serial.println("door open");
+  UploadDoorStatus();
+  startMotor(1);
+  delay(500);
+  Serial.println("door close");
+  startMotor(-1);
+  Door = OFF;
+  UploadDoorStatus();
+  delay(500);
+}
+
+bool UploadEnv()
 {
-        return celsius + 273.15;
-}     //摄氏温度转化为开氏温度
+  bool flag;
+  int intel_temp,fracl_temp;
+  int intel_mois,fracl_mois;
+  int len;
+
+  cleanBuffer(ATcmd,BUF_LEN);
+  snprintf(ATcmd,BUF_LEN,AT_MQTT_PUB_SET,ProductKey,DeviceName);
+  flag = check_send_cmd(ATcmd,AT_OK,DEFAULT_TIMEOUT);
+  
+  cleanBuffer(ATdata,BUF_LEN_DATA);
+  intel_temp = (int)(RoomTemp);
+  fracl_temp = (int)((RoomTemp - intel_temp) * 10);
+
+  intel_mois = (int)(RoomMois);
+  fracl_mois = (int)((RoomMois - intel_mois) * 10);
+  
+  len = snprintf(ATdata,BUF_LEN_DATA,JSON_ENV_DATA_PACK,intel_temp,fracl_temp,intel_mois,fracl_mois,LightDetector,TVOC,eCO2);
+  
+  cleanBuffer(ATcmd,BUF_LEN);
+  snprintf(ATcmd,BUF_LEN,AT_MQTT_PUB_DATA,len-1);
+  flag = check_send_cmd(ATcmd,">",DEFAULT_TIMEOUT);
+  if(flag) flag = check_send_cmd(ATdata,AT_MQTT_PUB_DATA_SUCC,20);
+  if(flag) Serial.println("==============PUB ENV SUCC===============");
+  
+//  Serial.println(ATdata);
+//  cleanBuffer(ATdata,BUF_LEN_DATA);
+  return flag;
+}
+
+bool UploadBodyTemp()
+{
+  bool flag;
+  int intel,fracl;
+  int len;
+
+  cleanBuffer(ATcmd,BUF_LEN);
+  snprintf(ATcmd,BUF_LEN,AT_MQTT_PUB_SET,ProductKey,DeviceName);
+  flag = check_send_cmd(ATcmd,AT_OK,DEFAULT_TIMEOUT);
+  
+  cleanBuffer(ATdata,BUF_LEN_DATA);
+
+  intel = (int)(BodyTemp);
+  fracl = (int)((BodyTemp - intel) * 100);
+  
+  len = snprintf(ATdata,BUF_LEN_DATA,JSON_BODYTEMP_DATA_PACK,intel,fracl,bodyTempStatus);
+  
+  cleanBuffer(ATcmd,BUF_LEN);
+  snprintf(ATcmd,BUF_LEN,AT_MQTT_PUB_DATA,len-1);
+  flag = check_send_cmd(ATcmd,">",DEFAULT_TIMEOUT);
+  if(flag) flag = check_send_cmd(ATdata,AT_MQTT_PUB_DATA_SUCC,20);
+  if(flag) Serial.println("==============PUB BODYTEMP SUCC===============");
+  
+//  Serial.println(ATdata);
+//  cleanBuffer(ATdata,BUF_LEN_DATA);
+  return flag;
+}
+
+bool UploadDoorStatus()
+{
+  bool flag;
+  int inte1,frac1;
+  int len;
+
+  cleanBuffer(ATcmd,BUF_LEN);
+  snprintf(ATcmd,BUF_LEN,AT_MQTT_PUB_SET,ProductKey,DeviceName);
+  flag = check_send_cmd(ATcmd,AT_OK,DEFAULT_TIMEOUT);
+  
+  cleanBuffer(ATdata,BUF_LEN_DATA);
+  
+  len = snprintf(ATdata,BUF_LEN_DATA,JSON_DOORSTA_DATA_PACK,Door);
+  
+  cleanBuffer(ATcmd,BUF_LEN);
+  snprintf(ATcmd,BUF_LEN,AT_MQTT_PUB_DATA,len-1);
+  flag = check_send_cmd(ATcmd,">",DEFAULT_TIMEOUT);
+  if(flag) flag = check_send_cmd(ATdata,AT_MQTT_PUB_DATA_SUCC,20);
+  if(flag) Serial.println("==============PUB DOORSTATUS SUCC===============");
+  
+//  Serial.println(ATdata);
+//  cleanBuffer(ATdata,BUF_LEN_DATA);
+  return flag;
+}
